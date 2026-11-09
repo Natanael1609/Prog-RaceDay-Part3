@@ -1,0 +1,5 @@
+@model EventVm
+@{ViewData["Title"]=Model.Id==null?"Create event":"Edit event";var action=Model.Id==null?"Create":"Edit";}
+<h1 class="fw-bold">@ViewData["Title"]</h1><div class="card p-4"><form asp-action="@action" method="post" enctype="multipart/form-data"><div asp-validation-summary="ModelOnly" class="text-danger"></div><input asp-for="Id" type="hidden"/>
+@foreach(var f in new[]{"Name","Description","Location","EventType","Distance","Date"}){<label class="form-label" for="@f">@f</label><input class="form-control mb-3" id="@f" name="@f" value="@(Model.GetType().GetProperty(f)?.GetValue(Model))"/>}
+<label class="form-label">Event banner</label><input type="file" name="Banner" accept="image/*" class="form-control mb-3"/><button class="btn btn-warning">Save event</button></form></div>

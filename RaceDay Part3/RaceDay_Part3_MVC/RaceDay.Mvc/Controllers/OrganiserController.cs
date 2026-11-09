@@ -1,0 +1,20 @@
+using Microsoft.AspNetCore.Mvc;
+using RaceDay.Mvc.Models;
+using RaceDay.Mvc.Services;
+namespace RaceDay.Mvc.Controllers;
+public class OrganiserController(RaceDayApiClient api,SessionAuth auth):Controller
+{
+    private bool Allowed()=>auth.SignedIn && auth.Role?.Equals("Organiser",StringComparison.OrdinalIgnoreCase)==true;
+    public async Task<IActionResult> Events(){if(!Allowed())return RedirectToAction("Login","Account");try{ViewBag.Events=await api.Get("api/events/mine");}catch{ViewBag.Events=default(System.Text.Json.JsonElement);}return View();}
+    [HttpGet] public IActionResult Create(){if(!Allowed())return RedirectToAction("Login","Account");return View(new EventVm());}
+    [HttpPost,ValidateAntiForgeryToken] public async Task<IActionResult> Create(EventVm vm){if(!Allowed())return Forbid();if(!ModelState.IsValid)return View(vm);try{var e=await api.Post("api/events",new{Name=vm.Name,Description=vm.Description,Date=vm.Date,Location=vm.Location,Distance=vm.Distance,EventType=vm.EventType});if(vm.Banner!=null){var id=e.TryGetProperty("id",out var v)?v.ToString():"";if(id!="")await api.Upload($"api/events/{id}/banner",vm.Banner);}return RedirectToAction(nameof(Events));}catch{ModelState.AddModelError("","Event could not be saved. Verify the API endpoint and try again.");return View(vm);}}
+    [HttpGet] public async Task<IActionResult> Edit(int id){if(!Allowed())return RedirectToAction("Login","Account");try{var e=await api.Get($"api/events/{id}");return View("Create",new EventVm{Id=id,Name=Val(e,"name"),Description=Val(e,"description"),Location=Val(e,"location"),EventType=Val(e,"eventType"),Distance=decimal.TryParse(Val(e,"distance"),out var d)?d:0,Date=DateTime.TryParse(Val(e,"date"),out var dt)?dt:DateTime.Today});}catch{return NotFound();}}
+    [HttpPost,ValidateAntiForgeryToken] public async Task<IActionResult> Edit(int id,EventVm vm){if(!Allowed())return Forbid();if(!ModelState.IsValid)return View("Create",vm);try{await api.Put($"api/events/{id}",new{Name=vm.Name,Description=vm.Description,Date=vm.Date,Location=vm.Location,Distance=vm.Distance,EventType=vm.EventType});if(vm.Banner!=null)await api.Upload($"api/events/{id}/banner",vm.Banner);return RedirectToAction(nameof(Events));}catch{ModelState.AddModelError("","Update failed. Check API configuration.");return View("Create",vm);}}
+    [HttpPost,ValidateAntiForgeryToken] public async Task<IActionResult> Delete(int id){if(!Allowed())return Forbid();try{await api.Delete($"api/events/{id}");}catch{}return RedirectToAction(nameof(Events));}
+    public async Task<IActionResult> Enrolments(int eventId){if(!Allowed())return RedirectToAction("Login","Account");try{ViewBag.Data=await api.Get($"api/events/{eventId}/enrolments");}catch{ViewBag.Data=default(System.Text.Json.JsonElement);}return View();}
+    [HttpGet] public IActionResult Category(int eventId){if(!Allowed())return RedirectToAction("Login","Account");return View(new CategoryVm{EventId=eventId});}
+    [HttpPost,ValidateAntiForgeryToken] public async Task<IActionResult> Category(CategoryVm vm){if(!Allowed())return Forbid();if(!ModelState.IsValid)return View(vm);try{await api.Post($"api/events/{vm.EventId}/categories",new{Name=vm.Name,Type=vm.Type,Minimum=vm.Minimum,Maximum=vm.Maximum});return RedirectToAction(nameof(Events));}catch{ModelState.AddModelError("","Category could not be saved.");return View(vm);}}
+    [HttpGet] public IActionResult Result(int enrolmentId)=>Allowed()?View(new ResultVm{EnrolmentId=enrolmentId}):RedirectToAction("Login","Account");
+    [HttpPost,ValidateAntiForgeryToken] public async Task<IActionResult> Result(ResultVm vm){if(!Allowed())return Forbid();if(!ModelState.IsValid)return View(vm);try{await api.Post($"api/enrolments/{vm.EnrolmentId}/result",new{vm.FinishTime,vm.Position});TempData["Message"]="Result saved.";return RedirectToAction(nameof(Events));}catch{ModelState.AddModelError("","Result could not be saved.");return View(vm);}}
+    private static string Val(System.Text.Json.JsonElement e,string p)=>e.TryGetProperty(p,out var v)?v.ToString():"";
+}
